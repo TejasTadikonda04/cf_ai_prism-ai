@@ -5,16 +5,12 @@ All AI prompts I wrote to assist with building this project are shown below. I u
 # Prompts: 
 
 I am working on building a type of AI-powered application on Cloudflare. It will use an LLM, workflow/coordination, user input via chat or voice, and memory or state. I want you to help me brainstorm some potential application ideas.
-
 A good AI-powered application is:
 1. Innovative. I don't want to do something that has been done many times before. I want to create an applicatoin that is innovative in some way.
 2. Useful. I want it to provide some sort of value to the user and not simply be for demonstration purposes.
-
 Brainstorm 5-10 ideas of potential AI-powered applications and write a concise paragraph detailing each one.
 
-
 I want you to mock a file structure for this project. There should be a frontend folder named public/ and a backend folder named src/. 
-
 
 Let's work on creating an MVP for Prism AI. Based on the file structure I provided, I want you to generate the following files: 
 1. wrangler.toml: This file tells Cloudflare to enable Workers AI and provision the Durable Object database. 
@@ -25,3 +21,5 @@ I have provided the Cloudflare documentation for your reference. [attached .txt 
 I am getting the following error when attempting to generate a color Palette: Error connecting to AI: TypeError: Cannot read properties of undefined (reading 'forEach'). Explain the error and make the necessary changes to @index.ts and @index.html
 
 There is a problem with the history. As soon as a new color gradient is generated, the previous color dissapears in the history. Diagnose the issue and make the necessary changes. 
+
+The algorithm currently only factors in one color out of the 5 in order to generate the gradient. I want you to change the algorithm to create the gradient using all 5 of the colors returned by the LLM.
