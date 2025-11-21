@@ -1,2 +1,4 @@
 venv/
 CURSOR.md
+node_modules/
+.wrangler/
