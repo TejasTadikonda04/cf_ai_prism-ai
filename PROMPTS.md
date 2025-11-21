@@ -31,3 +31,4 @@ I want you to help me create a comprehensive README.md for this project. Here is
 4. Prerequisites (Node.js, npm, cloudflare account)
 5. Installation: Clone repo, install dependencies, starting dev server
 6. Features: More comprehensive list of the features, expand on the description. 
+Keep it simple and concise. Do not use any emojis. 
