@@ -1,0 +1,18 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "prism-ai"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+# 1. Bind the AI capability
+[ai]
+binding = "AI"
+
+# 2. Bind the Durable Object for Memory/State
+[[durable_objects.bindings]]
+name = "HISTORY"
+class_name = "PaletteHistory"
+
+# 3. Create the Migration to initialize the Database
+[[migrations]]
+tag = "v1"
+new_classes = ["PaletteHistory"]
