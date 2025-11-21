@@ -15,26 +15,80 @@ export class PaletteHistory extends DurableObject {
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    const path = url.pathname;
 
     // 1. Save a new palette
-    if (request.method === "POST") {
-      const palette = await request.json();
-      // Generate a timestamp ID so we can sort later
-      const id = Date.now().toString(); 
-      await this.ctx.storage.put(id, palette);
-      return new Response("Saved", { status: 201 });
+    if (request.method === "POST" && (path === "/save" || path === "/internal/save")) {
+      try {
+        const palette: any = await request.json();
+        // Generate a unique ID: timestamp + random suffix to avoid collisions
+        // Format: timestamp-random (e.g., "1234567890-abc123")
+        const timestamp = Date.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 9);
+        const id = `${timestamp}-${randomSuffix}`;
+        
+        // Ensure the palette has a timestamp for sorting
+        if (!palette.timestamp) {
+          palette.timestamp = timestamp;
+        }
+        
+        await this.ctx.storage.put(id, palette);
+        return new Response(JSON.stringify({ success: true, id }), { 
+          status: 201,
+          headers: { "Content-Type": "application/json" }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: "Failed to save palette", details: String(e) }), { 
+          status: 500,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
     }
 
     // 2. Retrieve history
-    if (request.method === "GET") {
-      // Get all stored palettes (Map<string, any>)
-      const stored = await this.ctx.storage.list({ reverse: true, limit: 50 });
-      return new Response(JSON.stringify(Object.fromEntries(stored)), {
-        headers: { "Content-Type": "application/json" },
-      });
+    if (request.method === "GET" && (path === "/history" || path === "/internal/history")) {
+      try {
+        // Get all stored palettes (Map<string, any>)
+        // Use list() without limit first to get all, then sort
+        const stored = await this.ctx.storage.list();
+        
+        // Convert Map to array, sort by timestamp (newest first), then limit
+        const items: Array<[string, any]> = [];
+        for (const [key, value] of stored.entries()) {
+          items.push([key, value]);
+        }
+        
+        // Sort by timestamp (newest first)
+        items.sort((a, b) => {
+          const timeA = a[1]?.timestamp || 0;
+          const timeB = b[1]?.timestamp || 0;
+          return timeB - timeA; // Descending order (newest first)
+        });
+        
+        // Limit to 50 most recent
+        const limited = items.slice(0, 50);
+        
+        // Convert back to object for JSON serialization
+        const historyObj: Record<string, any> = {};
+        for (const [key, value] of limited) {
+          historyObj[key] = value;
+        }
+        
+        return new Response(JSON.stringify(historyObj), {
+          headers: { "Content-Type": "application/json" },
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: "Failed to retrieve history", details: String(e) }), { 
+          status: 500,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
     }
 
-    return new Response("Method Not Allowed", { status: 405 });
+    return new Response(JSON.stringify({ error: "Method Not Allowed" }), { 
+      status: 405,
+      headers: { "Content-Type": "application/json" }
+    });
   }
 }
 
@@ -176,11 +230,22 @@ export default {
         const stub = env.HISTORY.get(id);
         
         // Send the generated palette to the DO to be saved
-        // We don't await this (fire and forget) to make the UI feel faster
-        ctx.waitUntil(stub.fetch("http://internal/save", {
+        // We await this to ensure it's saved before returning, but use waitUntil for background processing
+        const savePromise = stub.fetch("http://internal/save", {
             method: "POST",
             body: JSON.stringify({ ...palette, original_text: text, timestamp: Date.now() })
-        }));
+        });
+        
+        // Use waitUntil to ensure it completes even if the response is sent first
+        ctx.waitUntil(savePromise);
+        
+        // Also await it to ensure it's saved (this won't block the response too long)
+        try {
+            await savePromise;
+        } catch (saveError) {
+            // Log but don't fail the request if save fails
+            console.error("Failed to save palette to history:", saveError);
+        }
 
         return new Response(JSON.stringify(palette), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -193,16 +258,37 @@ export default {
 
     // --- ROUTE 2: GET HISTORY (Read from Durable Object) ---
     if (request.method === "GET" && url.pathname === "/api/history") {
-        const userId = url.searchParams.get("userId") || "default-user";
-        const id = env.HISTORY.idFromName(userId);
-        const stub = env.HISTORY.get(id);
+        try {
+            const userId = url.searchParams.get("userId") || "default-user";
+            const id = env.HISTORY.idFromName(userId);
+            const stub = env.HISTORY.get(id);
 
-        const historyResponse = await stub.fetch("http://internal/history");
-        const historyData = await historyResponse.text();
+            const historyResponse = await stub.fetch("http://internal/history");
+            
+            if (!historyResponse.ok) {
+                return new Response(JSON.stringify({ 
+                    error: "Failed to retrieve history", 
+                    status: historyResponse.status 
+                }), { 
+                    status: historyResponse.status,
+                    headers: { ...corsHeaders, "Content-Type": "application/json" }
+                });
+            }
 
-        return new Response(historyData, {
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
+            const historyData = await historyResponse.text();
+
+            return new Response(historyData, {
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+        } catch (err) {
+            return new Response(JSON.stringify({ 
+                error: "Server Error retrieving history", 
+                details: String(err) 
+            }), { 
+                status: 500,
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+        }
     }
 
     return new Response("Not Found", { status: 404, headers: corsHeaders });

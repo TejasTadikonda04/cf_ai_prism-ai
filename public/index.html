@@ -161,7 +161,10 @@
                 }
 
                 renderPalette(data);
-                loadHistory(); // Refresh history list
+                // Wait a bit for the save to complete before refreshing history
+                setTimeout(() => {
+                    loadHistory(); // Refresh history list
+                }, 500); // 500ms delay to ensure save completes
 
             } catch (e) {
                 alert("Error connecting to AI: " + e.message);
@@ -210,23 +213,40 @@
             const list = document.getElementById('historyList');
             try {
                 const res = await fetch(`http://localhost:8787/api/history?userId=${userId}`);
+                
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
+                
                 const history = await res.json();
+                
+                // Check if response contains an error
+                if (history.error) {
+                    list.innerHTML = `<div style="padding:10px; text-align:center; color:#888;">Error loading history: ${history.error}</div>`;
+                    return;
+                }
                 
                 list.innerHTML = '';
                 const items = Object.values(history);
 
                 if (items.length === 0) {
-                    list.innerHTML = '<div style="padding:10px; text-align:center">No history yet</div>';
+                    list.innerHTML = '<div style="padding:10px; text-align:center; color:#888;">No history yet</div>';
                     return;
                 }
 
                 items.forEach(item => {
+                    // Validate item structure
+                    if (!item || !item.colors || !Array.isArray(item.colors)) {
+                        console.warn("Invalid history item:", item);
+                        return;
+                    }
+                    
                     const row = document.createElement('div');
                     row.className = 'history-item';
                     row.innerHTML = `
-                        <span>${item.name}</span>
+                        <span>${item.name || "Unnamed Palette"}</span>
                         <div style="display:flex; gap:2px">
-                            ${item.colors.map(c => `<div style="width:10px; height:10px; background:${c};"></div>`).join('')}
+                            ${item.colors.map(c => `<div style="width:10px; height:10px; background:${c}; border-radius:2px;"></div>`).join('')}
                         </div>
                     `;
                     row.onclick = () => renderPalette(item); // Click history to restore
@@ -234,7 +254,8 @@
                     list.appendChild(row);
                 });
             } catch (e) {
-                console.log("History not ready yet");
+                console.error("History load error:", e);
+                list.innerHTML = '<div style="padding:10px; text-align:center; color:#888;">Could not load history</div>';
             }
         }
 
