@@ -89,12 +89,85 @@ export default {
         // C. Clean up the response (Llama sometimes adds extra text, we try to parse just the JSON)
         let palette;
         try {
+            // Check if aiResponse exists and has a response property
+            if (!aiResponse) {
+                return new Response(JSON.stringify({ error: "AI returned no response" }), { status: 500, headers: corsHeaders });
+            }
+
+            // Handle different possible response formats
+            let rawText: string;
+            if (typeof aiResponse === 'string') {
+                rawText = aiResponse;
+            } else if (aiResponse.response) {
+                // Ensure response is a string
+                rawText = typeof aiResponse.response === 'string' 
+                    ? aiResponse.response 
+                    : JSON.stringify(aiResponse.response);
+            } else if (aiResponse.text) {
+                // Ensure text is a string
+                rawText = typeof aiResponse.text === 'string' 
+                    ? aiResponse.text 
+                    : JSON.stringify(aiResponse.text);
+            } else {
+                // Try to stringify and parse if it's already an object
+                rawText = JSON.stringify(aiResponse);
+            }
+
             // Sometimes models wrap JSON in markdown code blocks like ```json ... ```
-            const raw = aiResponse.response.replace(/```json|```/g, "").trim();
-            palette = JSON.parse(raw);
+            const cleaned = rawText.replace(/```json|```/g, "").trim();
+            
+            // Try to extract JSON if there's extra text around it
+            const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+            const jsonString = jsonMatch ? jsonMatch[0] : cleaned;
+            
+            palette = JSON.parse(jsonString);
+
+            // Validate the palette structure
+            if (!palette || !palette.colors || !Array.isArray(palette.colors)) {
+                return new Response(JSON.stringify({ 
+                    error: "AI response missing colors array", 
+                    received: palette,
+                    raw: rawText.substring(0, 200) 
+                }), { status: 500, headers: corsHeaders });
+            }
+
+            // Ensure we have at least some colors
+            if (palette.colors.length === 0) {
+                return new Response(JSON.stringify({ 
+                    error: "AI returned empty colors array",
+                    received: palette 
+                }), { status: 500, headers: corsHeaders });
+            }
+
         } catch (e) {
             // Fallback if JSON parsing fails
-            return new Response(JSON.stringify({ error: "AI generation failed format", raw: aiResponse.response }), { status: 500, headers: corsHeaders });
+            let rawPreview = "No response";
+            if (aiResponse) {
+                try {
+                    let rawValue: any;
+                    if (aiResponse.response !== undefined) {
+                        rawValue = aiResponse.response;
+                    } else if (aiResponse.text !== undefined) {
+                        rawValue = aiResponse.text;
+                    } else {
+                        rawValue = aiResponse;
+                    }
+                    
+                    // Convert to string safely
+                    const rawString = typeof rawValue === 'string' 
+                        ? rawValue 
+                        : JSON.stringify(rawValue);
+                    rawPreview = rawString.substring(0, 200);
+                } catch (previewError) {
+                    rawPreview = "Could not extract response preview";
+                }
+            }
+            
+            return new Response(JSON.stringify({ 
+                error: "AI generation failed to parse", 
+                details: String(e),
+                raw: rawPreview
+            }), { status: 500, headers: corsHeaders });
         }
 
         // D. Save to History (Durable Object)

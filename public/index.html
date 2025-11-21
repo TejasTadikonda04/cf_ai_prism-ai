@@ -146,11 +146,26 @@
                 });
 
                 const data = await res.json();
+                
+                // Check if the response contains an error
+                if (data.error) {
+                    alert("Error: " + data.error + (data.details ? "\nDetails: " + data.details : ""));
+                    return;
+                }
+
+                // Validate the data structure before rendering
+                if (!data || !data.colors || !Array.isArray(data.colors)) {
+                    alert("Invalid response from server. Expected colors array.");
+                    console.error("Invalid data:", data);
+                    return;
+                }
+
                 renderPalette(data);
                 loadHistory(); // Refresh history list
 
             } catch (e) {
-                alert("Error connecting to AI: " + e);
+                alert("Error connecting to AI: " + e.message);
+                console.error("Fetch error:", e);
             }
 
             btn.innerText = "Generate Palette";
@@ -161,6 +176,12 @@
         function renderPalette(data) {
             const box = document.getElementById('paletteBox');
             const name = document.getElementById('paletteName');
+
+            // Validate data structure
+            if (!data || !data.colors || !Array.isArray(data.colors) || data.colors.length === 0) {
+                console.error("Invalid palette data:", data);
+                return;
+            }
 
             // Clear old colors
             box.innerHTML = '';
@@ -174,12 +195,14 @@
                 box.appendChild(div);
             });
 
-            name.innerText = data.name;
+            name.innerText = data.name || "Unnamed Palette";
             name.style.opacity = 1;
             box.classList.add('visible');
 
             // Apply the vibe to the whole body background
-            document.body.style.background = `radial-gradient(circle at center, ${data.colors[0]}, #111)`;
+            if (data.colors[0]) {
+                document.body.style.background = `radial-gradient(circle at center, ${data.colors[0]}, #111)`;
+            }
         }
 
         // 3. LOAD HISTORY (From Durable Object)
