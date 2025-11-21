@@ -202,9 +202,25 @@
             name.style.opacity = 1;
             box.classList.add('visible');
 
-            // Apply the vibe to the whole body background
-            if (data.colors[0]) {
-                document.body.style.background = `radial-gradient(circle at center, ${data.colors[0]}, #111)`;
+            // Apply the vibe to the whole body background using all 5 colors
+            if (data.colors && data.colors.length > 0) {
+                // Create a sophisticated gradient using all colors
+                // Use a radial gradient that transitions smoothly through all colors
+                const colors = data.colors;
+                
+                // Build color stops: start with first color at center, transition through all colors
+                // Use non-linear distribution for better visual effect
+                const stops = [
+                    `${colors[0]} 0%`,           // Center: first color
+                    `${colors[1]} 20%`,         // Transition to second
+                    `${colors[2]} 45%`,          // Middle: third color
+                    `${colors[3]} 70%`,          // Transition to fourth
+                    `${colors[4]} 90%`,          // Near edge: fifth color
+                    `#111 100%`                   // Edge: dark fallback
+                ].join(', ');
+                
+                // Apply radial gradient from center
+                document.body.style.background = `radial-gradient(circle at center, ${stops})`;
             }
         }
 
